@@ -1,7 +1,7 @@
 
 // *****************************************************************************
-// *** Retrieve data from AVM FritzBox via TR-064 and forward it to an MQTT  ***
-// *** server.                                                               ***
+// *** Retrieve data infinitely at a given interval from AVM FritzBox via    ***
+// *** TR-064 and forward it to an MQTT server.                              ***
 // *****************************************************************************
 
 // 2023jan08, Marcel Timm, RhinoDevel
@@ -10,13 +10,22 @@ const conf = {
         fritzBoxUsername: '********',
         fritzBoxPassword: '********',
         mqttHostname: '********',
-        mqttTopic: '********'
+        mqttTopic: '********',
+        interval: 3 * 1000 // ms
     },
 
     fb = require('./nodejs-fritzbox/nodejs-fritzbox.js'),
     mqtt = require('mqtt'),
 
+    setExecTimer = function()
+    {
+        setTimeout(exec, conf.interval);
+    },
+
     /** To be called on retrieval of data from FritzBox.
+     * 
+     * - Maybe improvable: Each time reconnecting to MQTT server instead of
+     *                     keeping the connection.
      */
     onReceived = function(o)
     {
@@ -34,6 +43,8 @@ const conf = {
                 {
                     c.publish(conf.mqttTopic, JSON.stringify(o));
                     c.end();
+
+                    setExecTimer(); // *** "RECURSION" ***
                 });
 
             c.on(
@@ -42,8 +53,15 @@ const conf = {
                 {
                     console.log('Error: Some MQTT-related error happened!');
                     c.end();
+
+                    setExecTimer(); // *** "RECURSION" ***
                 });
         }
+    },
+
+    exec = function()
+    {
+        fb.exec(onReceived, conf.fritzBoxUsername, conf.fritzBoxPassword);
     };
 
-fb.exec(onReceived, conf.fritzBoxUsername, conf.fritzBoxPassword);
+exec();
